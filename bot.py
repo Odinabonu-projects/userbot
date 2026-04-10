@@ -6,11 +6,11 @@ import os
 import asyncio
 
 # Environment variables dan ma'lumotlarni olish
-API_ID = int(os.environ.get('API_ID', 37866177))
-API_HASH = os.environ.get('API_HASH', '758b2e4b9d0b8ad93db97e46c675150c')
-TARGET_CHANNEL = os.environ.get('TARGET_CHANNEL', 'https://t.me/+Rg5bgxypihwxZDBi')
+API_ID = int(os.environ.get('API_ID'))
+API_HASH = os.environ.get('API_HASH')
+TARGET_CHANNEL = os.environ.get('TARGET_CHANNEL')
 
-# Session string for non-interactive authentication (muhim!)
+# Session string for non-interactive authentication (MUHIM!)
 SESSION_STRING = os.environ.get('SESSION_STRING', None)
 
 # Sessiya fayli uchun
@@ -24,40 +24,79 @@ client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
 
 async def start_client():
     """Start client with non-interactive authentication"""
+    
+    # FIRST METHOD: Use session string if provided (BEST for Railway)
     if SESSION_STRING:
-        # Use session string if provided
-        await client.start(session_string=SESSION_STRING)
-        print("✅ Session string orqali ulandi!")
+        print("🔑 Session string orqali ulanish...")
+        try:
+            # Connect first
+            await client.connect()
+            # Then sign in with session string
+            await client.start(session_string=SESSION_STRING)
+            print("✅ Session string orqali muvaffaqiyatli ulandi!")
+            return await client.get_me()
+        except Exception as e:
+            print(f"❌ Session string xatosi: {e}")
+            raise
+    
+    # SECOND METHOD: Use phone number (but this still requires interactive code)
     elif PHONE_NUMBER:
-        # Use phone number and code handling
         print(f"📱 Telefon raqami: {PHONE_NUMBER}")
         
-        # Send code request
-        await client.send_code_request(PHONE_NUMBER)
+        # Connect first
+        await client.connect()
         
-        # Get code from environment or fallback
-        CODE = os.environ.get('CODE', None)
-        
-        if CODE:
-            # Use code from environment
-            await client.sign_in(PHONE_NUMBER, CODE)
-        else:
-            # Try to sign in without code (for existing session)
+        # Check if already authorized
+        if not await client.is_user_authorized():
+            print("📱 Telefon raqamiga kod yuborilmoqda...")
+            
+            # Send code request
             try:
-                await client.sign_in(PHONE_NUMBER)
+                await client.send_code_request(PHONE_NUMBER)
+                print("✅ Kod yuborildi!")
+                
+                # Get code from environment
+                CODE = os.environ.get('CODE', None)
+                
+                if CODE:
+                    print(f"🔑 Koddan foydalanilmoqda: {CODE}")
+                    await client.sign_in(PHONE_NUMBER, CODE)
+                else:
+                    print("❌ CODE environment variable topilmadi!")
+                    print("💡 Iltimos, quyidagi o'zgaruvchilarni o'rnating:")
+                    print("   - PHONE_NUMBER")
+                    print("   - CODE (Telegramdan kelgan kod)")
+                    print("   - PASSWORD (agar 2FA yoqilgan bo'lsa)")
+                    raise Exception("Verification code required")
+                
+                # Handle 2FA if needed
+                if PASSWORD:
+                    print("🔐 2FA paroli tekshirilmoqda...")
+                    await client.sign_in(password=PASSWORD)
+                    
             except Exception as e:
-                print(f"❌ Autentifikatsiya xatosi: {e}")
-                print("💡 Iltimos, CODE environment variable ni o'rnating!")
+                print(f"❌ Kod yuborish xatosi: {e}")
                 raise
+        else:
+            print("✅ Oldingi sessiya mavjud!")
         
-        # Handle 2FA if needed
-        if PASSWORD:
-            await client.sign_in(password=PASSWORD)
-    else:
-        # Try to use existing session file
-        await client.start()
+        print("✅ Telefon raqami orqali ulandi!")
+        return await client.get_me()
     
-    return await client.get_me()
+    # THIRD METHOD: Try to use existing session file
+    else:
+        print("💾 Mavjud sessiya fayli tekshirilmoqda...")
+        await client.connect()
+        
+        if await client.is_user_authorized():
+            print("✅ Mavjud sessiya fayli ishlatilmoqda!")
+            return await client.get_me()
+        else:
+            print("❌ Hech qanday autentifikatsiya ma'lumoti topilmadi!")
+            print("💡 Iltimos, quyidagi o'zgaruvchilardan birini o'rnating:")
+            print("   - SESSION_STRING (Tavsiya etiladi)")
+            print("   - PHONE_NUMBER + CODE")
+            raise Exception("No authentication method available")
 
 @client.on(events.NewMessage)
 async def handler(event):
@@ -249,6 +288,11 @@ async def main():
     print("🚀 Userbot ishga tushmoqda...")
     
     try:
+        # Connect client first
+        await client.connect()
+        print("✅ Client ulandi!")
+        
+        # Then start authentication
         me = await start_client()
         print(f"✅ Userbot ishlayapti: {me.first_name} (@{me.username})")
         print("="*50)
@@ -259,6 +303,8 @@ async def main():
         await client.run_until_disconnected()
     except Exception as e:
         print(f"❌ Ulanish xatosi: {e}")
+        import traceback
+        traceback.print_exc()
         raise
 
 if __name__ == '__main__':
