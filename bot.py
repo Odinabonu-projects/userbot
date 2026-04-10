@@ -8,7 +8,7 @@ import asyncio
 # Environment variables dan ma'lumotlarni olish
 API_ID = int(os.environ.get('API_ID', 37866177))
 API_HASH = os.environ.get('API_HASH', '758b2e4b9d0b8ad93db97e46c675150c')
-TARGET_CHANNEL = os.environ.get('TARGET_CHANNEL', '@meitooh')
+TARGET_CHANNEL = os.environ.get('TARGET_CHANNEL', 'https://t.me/+Rg5bgxypihwxZDBi')
 
 # Sessiya fayli uchun
 SESSION_NAME = 'userbot_session'
