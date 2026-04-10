@@ -10,10 +10,54 @@ API_ID = int(os.environ.get('API_ID', 37866177))
 API_HASH = os.environ.get('API_HASH', '758b2e4b9d0b8ad93db97e46c675150c')
 TARGET_CHANNEL = os.environ.get('TARGET_CHANNEL', 'https://t.me/+Rg5bgxypihwxZDBi')
 
+# Session string for non-interactive authentication (muhim!)
+SESSION_STRING = os.environ.get('SESSION_STRING', None)
+
 # Sessiya fayli uchun
 SESSION_NAME = 'userbot_session'
 
+# Environment variables orqali telefon raqami va parol
+PHONE_NUMBER = os.environ.get('PHONE_NUMBER', None)
+PASSWORD = os.environ.get('PASSWORD', None)  # 2FA parol bo'lsa
+
 client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
+
+async def start_client():
+    """Start client with non-interactive authentication"""
+    if SESSION_STRING:
+        # Use session string if provided
+        await client.start(session_string=SESSION_STRING)
+        print("✅ Session string orqali ulandi!")
+    elif PHONE_NUMBER:
+        # Use phone number and code handling
+        print(f"📱 Telefon raqami: {PHONE_NUMBER}")
+        
+        # Send code request
+        await client.send_code_request(PHONE_NUMBER)
+        
+        # Get code from environment or fallback
+        CODE = os.environ.get('CODE', None)
+        
+        if CODE:
+            # Use code from environment
+            await client.sign_in(PHONE_NUMBER, CODE)
+        else:
+            # Try to sign in without code (for existing session)
+            try:
+                await client.sign_in(PHONE_NUMBER)
+            except Exception as e:
+                print(f"❌ Autentifikatsiya xatosi: {e}")
+                print("💡 Iltimos, CODE environment variable ni o'rnating!")
+                raise
+        
+        # Handle 2FA if needed
+        if PASSWORD:
+            await client.sign_in(password=PASSWORD)
+    else:
+        # Try to use existing session file
+        await client.start()
+    
+    return await client.get_me()
 
 @client.on(events.NewMessage)
 async def handler(event):
@@ -203,19 +247,24 @@ async def save_user_info(user, original_message):
 
 async def main():
     print("🚀 Userbot ishga tushmoqda...")
-    await client.start()
     
-    me = await client.get_me()
-    print(f"✅ Userbot ishlayapti: {me.first_name} (@{me.username})")
-    print("="*50)
-    print(f"📨 Ma'lumotlar yuboriladigan kanal: {TARGET_CHANNEL}")
-    print("="*50)
-    print("⏹ To'xtatish: Ctrl+C\n")
-    
-    await client.run_until_disconnected()
+    try:
+        me = await start_client()
+        print(f"✅ Userbot ishlayapti: {me.first_name} (@{me.username})")
+        print("="*50)
+        print(f"📨 Ma'lumotlar yuboriladigan kanal: {TARGET_CHANNEL}")
+        print("="*50)
+        print("⏹ To'xtatish: Ctrl+C\n")
+        
+        await client.run_until_disconnected()
+    except Exception as e:
+        print(f"❌ Ulanish xatosi: {e}")
+        raise
 
 if __name__ == '__main__':
     try:
         client.loop.run_until_complete(main())
     except KeyboardInterrupt:
         print("\n⏹ Userbot to'xtatildi")
+    except Exception as e:
+        print(f"\n❌ Dastur xatosi: {e}")
